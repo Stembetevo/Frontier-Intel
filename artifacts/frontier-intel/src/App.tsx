@@ -1,6 +1,7 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SuiClientProvider, WalletProvider, createNetworkConfig } from "@mysten/dapp-kit";
+import { getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
 import "@mysten/dapp-kit/dist/index.css";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,8 +10,8 @@ import Home from "@/pages/Home";
 import NotFound from "@/pages/not-found";
 
 const { networkConfig } = createNetworkConfig({
-  mainnet: { url: "https://fullnode.mainnet.sui.io:443" },
-  testnet: { url: "https://fullnode.testnet.sui.io:443" },
+  mainnet: { url: getJsonRpcFullnodeUrl("mainnet"), network: "mainnet" as const },
+  testnet: { url: getJsonRpcFullnodeUrl("testnet"), network: "testnet" as const },
 });
 
 const queryClient = new QueryClient({
@@ -35,7 +36,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork="mainnet">
-        <WalletProvider autoConnect>
+        <WalletProvider
+          autoConnect
+          preferredWallets={["EVE Vault", "Sui Wallet", "Suiet"]}
+          theme={null}
+        >
           <WalletBridgeProvider>
           <TooltipProvider>
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
