@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@/contexts/WalletContext';
+import { ConnectModal } from '@mysten/dapp-kit';
 import { NeonButton, TacticalPanel } from './ui/SciFiUI';
 import { useCreateIntelReport, CreateIntelReportRequestReportType } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -13,7 +14,7 @@ interface IntelModalProps {
 }
 
 export function IntelModal({ systemId, isOpen, onClose }: IntelModalProps) {
-  const { address, isConnected, connect } = useWallet();
+  const { address, isConnected } = useWallet();
   const [message, setMessage] = useState('');
   const [reportType, setReportType] = useState<CreateIntelReportRequestReportType>(CreateIntelReportRequestReportType.FLEET_SPOTTED);
   
@@ -81,9 +82,13 @@ export function IntelModal({ systemId, isOpen, onClose }: IntelModalProps) {
                 {!isConnected ? (
                   <div className="bg-warning/10 border border-warning/30 p-4 rounded text-center space-y-3">
                     <p className="text-sm text-warning font-mono">EVE Vault connection required to sign intel reports.</p>
-                    <NeonButton type="button" onClick={connect} variant="outline" className="w-full text-warning border-warning hover:bg-warning/20 hover:text-warning">
-                      CONNECT VAULT
-                    </NeonButton>
+                    <ConnectModal
+                      trigger={
+                        <NeonButton type="button" variant="outline" className="w-full text-warning border-warning hover:bg-warning/20 hover:text-warning">
+                          CONNECT VAULT
+                        </NeonButton>
+                      }
+                    />
                   </div>
                 ) : (
                   <>
