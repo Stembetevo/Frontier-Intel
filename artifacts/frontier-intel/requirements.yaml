@@ -1,0 +1,19 @@
+packages:
+  "d3": "Required for interactive 2D galaxy map visualization"
+  "@types/d3": "TypeScript definitions for d3"
+  "framer-motion": "For smooth sci-fi UI panel transitions and animations"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility for merging tailwind classes without style conflicts"
+  "date-fns": "For formatting intel report and event timestamps"
+
+images:
+  - path: "artifacts/frontier-intel/public/images/space-bg.png"
+    description: "Deep space background with subtle nebulae in dark navy and teal, subtle tactical grid overlay, sci-fi aesthetic"
+    aspect_ratio: "16:9"
+  - path: "artifacts/frontier-intel/public/images/logo.png"
+    description: "Minimalist futuristic sci-fi tactical logo icon, geometric shape in glowing cyan on transparent background"
+    aspect_ratio: "1:1"
+
+notes:
+  - Expecting @workspace/api-client-react to be available for React Query hooks
+  - Using d3-force for a dynamic, drifting galaxy map simulation

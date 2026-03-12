@@ -1,0 +1,199 @@
+I am building "Frontier Intel" — a live galaxy threat map and 
+intelligence dashboard for EVE Frontier, CCP Games' blockchain-based 
+space survival MMO built on the Sui blockchain. This is my submission 
+for the EVE Frontier x Sui Hackathon (Theme: "Toolkit for Civilization").
+
+---
+
+## WHAT I AM BUILDING
+
+Frontier Intel is an external web application (not an in-game mod) that 
+connects to the EVE Frontier live universe through their blockchain 
+gateway and displays real-time intelligence to players. Think of it as 
+a war room dashboard — players open it before logging in to understand 
+where danger is, where structures are, and what other players are doing.
+
+---
+
+## CORE FEATURES
+
+1. LIVE THREAT MAP
+   - A 2D interactive galaxy map showing all solar systems as nodes
+   - Color-coded threat overlays based on recent kill events:
+     RED = high danger (multiple kills in last hour)
+     YELLOW = moderate activity
+     GREEN = quiet/safe
+   - Data source: KillmailCreatedEvent from the killmail module
+   - Key fields: solar_system_id, killer_character_id, 
+     victim_character_id, loss_type (SHIP or STRUCTURE), kill_timestamp
+
+2. SMART ASSEMBLY MARKERS  
+   - Icons on the map showing player-built structures in each system
+   - Types: Gates, Turrets, Storage Units, Network Nodes
+   - Shows owner, online/offline status
+   - Data source: assembly objects from the blockchain gateway
+
+3. PLAYER INTEL REPORTS (Sui wallet feature)
+   - Players can pin a text warning to any solar system
+   - e.g. "Fleet spotted here", "Ambush at this gate"
+   - Reports are signed with the player's EVE Vault (Sui wallet)
+   - Stored as lightweight Sui objects onchain — permanent and verifiable
+   - Uses zkLogin for frictionless onboarding
+
+4. GATE JUMP TRAFFIC
+   - Shows which systems have high player movement
+   - Helps identify busy trade routes vs. dead space
+   - Data source: gate module jump events
+
+---
+
+## TECH STACK
+
+- Frontend: Next.js 14 (App Router) + React + TypeScript
+- Map Rendering: D3.js (2D force graph / node-edge layout)
+- Blockchain Data: EVE Frontier Blockchain Gateway (REST)
+- Wallet/Identity: @mysten/sui TypeScript SDK + EVE Vault browser extension
+- Styling: Tailwind CSS
+- Deployment Target: Vercel
+
+---
+
+## EVE FRONTIER BLOCKCHAIN DETAILS
+
+- Game runs on Sui blockchain (migrated to Sui in Cycle 5, March 2025)
+- World Package ID: 
+  0x2ff3e06b96eb830bdcffbc6cae9b8fe43f005c3b94cef05d9ec23057df16f107
+- Live Server (Stillness) Gateway HTTP:
+  https://blockchain-gateway-stillness.live.tech.evefrontier.com
+- Live Server Gateway WSS:
+  wss://blockchain-gateway-stillness.live.tech.evefrontier.com
+- Sui TypeScript SDK: @mysten/sui (latest)
+- Standard Sui testnet GraphQL (for wallet queries only):
+  https://graphql.testnet.sui.io/graphql
+
+## CONFIRMED MOVE CONTRACT DETAILS (verified in Sui Vision explorer)
+
+Module: killmail
+Event struct: KillmailCreatedEvent (has copy, drop)
+Fields:
+  - killmail_id: TenantItemId
+  - killer_character_id: TenantItemId
+  - victim_character_id: TenantItemId
+  - solar_system_id: TenantItemId
+  - loss_type: LossType (enum: SHIP | STRUCTURE)
+  - kill_timestamp: u64
+
+Other confirmed modules in the package:
+  access, assembly, character, energy, fuel, gate, in_game_id,
+  inventory, killmail, location, metadata, network_node, 
+  object_registry, sig_verify, status, storage_unit, world
+
+---
+
+## PROJECT FOLDER STRUCTURE
+
+frontier-intel/
+├── app/
+│   ├── page.tsx                  ← Main map page (home)
+│   ├── layout.tsx                ← Root layout
+│   └── api/
+│       ├── kills/
+│       │   └── route.ts          ← Fetches KillmailCreatedEvents
+│       ├── assemblies/
+│       │   └── route.ts          ← Fetches Smart Assembly objects
+│       ├── jumps/
+│       │   └── route.ts          ← Fetches gate jump events
+│       └── intel/
+│           ├── route.ts          ← GET: fetch all intel reports
+│           └── [id]/route.ts     ← POST: submit new intel report
+├── components/
+│   ├── GalaxyMap.tsx             ← D3.js map canvas component
+│   ├── SystemNode.tsx            ← Individual solar system node
+│   ├── ThreatOverlay.tsx         ← Color heat logic
+│   ├── AssemblyMarker.tsx        ← Structure icons on map
+│   ├── IntelPanel.tsx            ← Side panel showing system details
+│   ├── IntelReportForm.tsx       ← Wallet-signed report submission
+│   └── WalletConnect.tsx         ← EVE Vault wallet connection
+├── lib/
+│   ├── worldConfig.ts            ← Gateway URLs and Package ID
+│   ├── suiClient.ts              ← SuiClient for wallet operations
+│   ├── threatScore.ts            ← Logic to calculate danger per system
+│   └── formatters.ts             ← Helpers for addresses, timestamps
+├── types/
+│   └── frontier.ts               ← TypeScript types for all game data
+├── hooks/
+│   ├── useKills.ts               ← Polling hook for kill events
+│   ├── useAssemblies.ts          ← Hook for assembly data
+│   └── useWallet.ts              ← Sui wallet connection hook
+└── public/
+    └── icons/                    ← Gate, turret, storage SVG icons
+
+---
+
+## CURRENT PROGRESS
+
+✅ Next.js project created
+✅ Sui TypeScript SDK installed  
+✅ Docker environment set up (EVE Frontier local dev environment)
+✅ World Package ID confirmed: 0x2ff3e0...
+✅ killmail module and KillmailCreatedEvent struct confirmed in 
+   Sui Vision explorer
+✅ Confirmed the correct data endpoint is the EVE Frontier 
+   blockchain gateway, NOT the standard Sui testnet GraphQL
+
+🔄 IN PROGRESS: Connecting to the blockchain gateway and 
+   getting first real kill event data returned from 
+   /api/kills route
+
+❌ NOT STARTED: D3.js galaxy map
+❌ NOT STARTED: Threat overlay logic  
+❌ NOT STARTED: Assembly markers
+❌ NOT STARTED: Wallet connection
+❌ NOT STARTED: Intel report feature
+
+---
+
+## ENVIRONMENT
+
+- OS: Linux (Ubuntu)
+- IDE: VS Code
+- Package manager: npm
+- Docker: running (EVE Frontier builder-scaffold localnet)
+- Browser: Firefox with Brave (testing)
+- Dev server: localhost:3000
+
+---
+
+## IMMEDIATE NEXT TASK
+
+Get the first real data response from the EVE Frontier 
+blockchain gateway. The /api/kills route currently returns 
+{"kills":[]} — empty. 
+
+Next step is to open the gateway base URL in the browser:
+https://blockchain-gateway-stillness.live.tech.evefrontier.com
+
+...to discover what endpoints are available, then update 
+the route.ts files to query the correct endpoint paths.
+
+---
+
+## IMPORTANT NOTES FOR AI ASSISTANT
+
+- Do NOT guess endpoint paths — always verify against the 
+  gateway response or official docs first
+- Do NOT use the standard Sui testnet GraphQL endpoint for 
+  game event data — it returns empty because game events 
+  live on the gateway, not public testnet
+- The SuiGraphQLClient is only useful for wallet/identity 
+  queries (reading player profile objects by wallet address)
+- All game state data (kills, assemblies, jumps, locations) 
+  comes from the blockchain gateway REST API
+- When the gateway endpoint structure is unknown, always 
+  fetch the base URL first and read what comes back before 
+  writing fetch code
+- My Sui knowledge is intermediate — I understand objects, 
+  transactions, and wallet concepts. I am a beginner in 
+  game development.
+- Keep explanations beginner-friendly for game dev concepts
+  but technical/precise for Sui concepts

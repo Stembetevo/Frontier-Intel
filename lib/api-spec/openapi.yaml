@@ -1,15 +1,22 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Frontier Intel API - EVE Frontier Galaxy Intelligence Dashboard
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: kills
+    description: Kill event data from EVE Frontier blockchain gateway
+  - name: assemblies
+    description: Smart Assembly structure data
+  - name: jumps
+    description: Gate jump traffic data
+  - name: intel
+    description: Player-submitted intel reports
 paths:
   /healthz:
     get:
@@ -24,6 +31,152 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /kills:
+    get:
+      operationId: getKills
+      tags: [kills]
+      summary: Get recent kill events
+      description: Fetches KillmailCreatedEvents from the EVE Frontier blockchain gateway
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: solar_system_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of kill events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KillsResponse"
+
+  /assemblies:
+    get:
+      operationId: getAssemblies
+      tags: [assemblies]
+      summary: Get smart assemblies
+      description: Fetches player-built structures from the EVE Frontier blockchain gateway
+      parameters:
+        - name: solar_system_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of smart assemblies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssembliesResponse"
+
+  /jumps:
+    get:
+      operationId: getJumps
+      tags: [jumps]
+      summary: Get gate jump traffic
+      description: Fetches gate jump events from the EVE Frontier blockchain gateway
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 200
+      responses:
+        "200":
+          description: Gate jump traffic data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JumpsResponse"
+
+  /intel:
+    get:
+      operationId: getIntelReports
+      tags: [intel]
+      summary: Get all intel reports
+      description: Returns all player-submitted intel reports
+      parameters:
+        - name: solar_system_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of intel reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntelReportsResponse"
+    post:
+      operationId: createIntelReport
+      tags: [intel]
+      summary: Submit an intel report
+      description: Submit a wallet-signed intel report for a solar system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIntelReportRequest"
+      responses:
+        "201":
+          description: Intel report created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntelReport"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /intel/{id}:
+    delete:
+      operationId: deleteIntelReport
+      tags: [intel]
+      summary: Delete an intel report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /systems:
+    get:
+      operationId: getSolarSystems
+      tags: [kills]
+      summary: Get solar system threat summary
+      description: Returns aggregated threat scores for all solar systems
+      responses:
+        "200":
+          description: Solar system threat map data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SolarSystemsResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +187,240 @@ components:
       required:
         - status
 
+    KillEvent:
+      type: object
+      properties:
+        killmail_id:
+          type: string
+        killer_character_id:
+          type: string
+        victim_character_id:
+          type: string
+        solar_system_id:
+          type: string
+        loss_type:
+          type: string
+          enum: [SHIP, STRUCTURE]
+        kill_timestamp:
+          type: string
+      required:
+        - killmail_id
+        - killer_character_id
+        - victim_character_id
+        - solar_system_id
+        - loss_type
+        - kill_timestamp
+
+    KillsResponse:
+      type: object
+      properties:
+        kills:
+          type: array
+          items:
+            $ref: "#/components/schemas/KillEvent"
+        total:
+          type: integer
+        gateway_status:
+          type: string
+      required:
+        - kills
+        - total
+        - gateway_status
+
+    SmartAssembly:
+      type: object
+      properties:
+        assembly_id:
+          type: string
+        solar_system_id:
+          type: string
+        owner_character_id:
+          type: string
+        assembly_type:
+          type: string
+          enum: [GATE, TURRET, STORAGE_UNIT, NETWORK_NODE, UNKNOWN]
+        is_online:
+          type: boolean
+        name:
+          type: string
+      required:
+        - assembly_id
+        - solar_system_id
+        - owner_character_id
+        - assembly_type
+        - is_online
+
+    AssembliesResponse:
+      type: object
+      properties:
+        assemblies:
+          type: array
+          items:
+            $ref: "#/components/schemas/SmartAssembly"
+        total:
+          type: integer
+        gateway_status:
+          type: string
+      required:
+        - assemblies
+        - total
+        - gateway_status
+
+    JumpEvent:
+      type: object
+      properties:
+        character_id:
+          type: string
+        from_solar_system_id:
+          type: string
+        to_solar_system_id:
+          type: string
+        jump_timestamp:
+          type: string
+        gate_id:
+          type: string
+      required:
+        - character_id
+        - from_solar_system_id
+        - to_solar_system_id
+        - jump_timestamp
+
+    JumpsResponse:
+      type: object
+      properties:
+        jumps:
+          type: array
+          items:
+            $ref: "#/components/schemas/JumpEvent"
+        total:
+          type: integer
+        gateway_status:
+          type: string
+      required:
+        - jumps
+        - total
+        - gateway_status
+
+    IntelReport:
+      type: object
+      properties:
+        id:
+          type: integer
+        solar_system_id:
+          type: string
+        message:
+          type: string
+        wallet_address:
+          type: string
+        report_type:
+          type: string
+          enum: [FLEET_SPOTTED, AMBUSH, SAFE, TRADE_ROUTE, OTHER]
+        created_at:
+          type: string
+        expires_at:
+          type: string
+      required:
+        - id
+        - solar_system_id
+        - message
+        - wallet_address
+        - report_type
+        - created_at
+
+    CreateIntelReportRequest:
+      type: object
+      properties:
+        solar_system_id:
+          type: string
+        message:
+          type: string
+        wallet_address:
+          type: string
+        report_type:
+          type: string
+          enum: [FLEET_SPOTTED, AMBUSH, SAFE, TRADE_ROUTE, OTHER]
+        signature:
+          type: string
+      required:
+        - solar_system_id
+        - message
+        - wallet_address
+        - report_type
+
+    IntelReportsResponse:
+      type: object
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: "#/components/schemas/IntelReport"
+        total:
+          type: integer
+      required:
+        - reports
+        - total
+
+    SolarSystemThreat:
+      type: object
+      properties:
+        solar_system_id:
+          type: string
+        threat_level:
+          type: string
+          enum: [HIGH, MEDIUM, LOW, UNKNOWN]
+        kill_count_1h:
+          type: integer
+        kill_count_24h:
+          type: integer
+        jump_count_1h:
+          type: integer
+        assembly_count:
+          type: integer
+        intel_count:
+          type: integer
+        last_activity:
+          type: string
+      required:
+        - solar_system_id
+        - threat_level
+        - kill_count_1h
+        - kill_count_24h
+        - jump_count_1h
+        - assembly_count
+        - intel_count
+
+    SolarSystemsResponse:
+      type: object
+      properties:
+        systems:
+          type: array
+          items:
+            $ref: "#/components/schemas/SolarSystemThreat"
+        total:
+          type: integer
+        last_updated:
+          type: string
+      required:
+        - systems
+        - total
+        - last_updated
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
