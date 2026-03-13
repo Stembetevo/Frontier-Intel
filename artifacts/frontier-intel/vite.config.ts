@@ -3,22 +3,14 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
-// PORT and BASE_PATH are only needed in dev/preview, not during `vite build`.
-const isBuild = process.argv.includes("build");
+// PORT is only used by the dev/preview server — never during `vite build`.
+// BASE_PATH defaults to "/" which is correct for Vercel.
+// Replit sets PORT and BASE_PATH automatically; external CI/CD (Vercel, etc.) does not.
 const isReplit = !!process.env.REPL_ID;
 
 const rawPort = process.env.PORT;
-const port = rawPort ? Number(rawPort) : 3000;
+const port = rawPort ? Number(rawPort) : 5173;
 const basePath = process.env.BASE_PATH ?? "/";
-
-if (!isBuild) {
-  if (!rawPort) {
-    throw new Error("PORT environment variable is required in dev/serve mode.");
-  }
-  if (Number.isNaN(port) || port <= 0) {
-    throw new Error(`Invalid PORT value: "${rawPort}"`);
-  }
-}
 
 export default defineConfig(async () => ({
   base: basePath,
