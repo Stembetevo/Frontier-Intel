@@ -2,6 +2,20 @@ export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };
 
+/**
+ * In production (deployed to Vercel), the API lives on a separate Render domain.
+ * Set VITE_API_URL to that domain (e.g. https://frontier-intel-api.onrender.com)
+ * and all API requests will be automatically prefixed.
+ * Leave unset in development — requests go to the Replit-proxied local server.
+ */
+const API_BASE =
+  typeof import.meta !== "undefined" &&
+  // @ts-expect-error — vite replaces import.meta.env at build time
+  typeof import.meta.env !== "undefined"
+    ? // @ts-expect-error
+      (import.meta.env.VITE_API_URL as string | undefined) ?? ""
+    : "";
+
 export type ErrorType<T = unknown> = ApiError<T>;
 
 export type BodyType<T> = T;
@@ -297,9 +311,18 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  const requestInfo = { method, url: resolveUrl(input) };
+  // Prepend the external API base URL when deployed (e.g. Render backend from Vercel).
+  // Relative paths like `/api/kills` become `https://my-api.onrender.com/api/kills`.
+  const resolvedInput = (() => {
+    if (!API_BASE) return input;
+    const url = resolveUrl(input);
+    if (url.startsWith("/")) return `${API_BASE.replace(/\/$/, "")}${url}`;
+    return input;
+  })();
 
-  const response = await fetch(input, { ...init, method, headers });
+  const requestInfo = { method, url: resolveUrl(resolvedInput) };
+
+  const response = await fetch(resolvedInput, { ...init, method, headers });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

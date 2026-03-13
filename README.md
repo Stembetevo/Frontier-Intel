@@ -173,3 +173,180 @@ Frontier Intel contributes to civilization building in EVE Frontier by:
 2. **Open API layer** — The `/api/systems` endpoint is a computed threat feed that any other tool (browser extensions, Discord bots, mobile apps) can consume.
 3. **Credible intel** — Reports are tied to Sui wallet addresses, making attribution verifiable on-chain and creating reputation incentives.
 4. **Gateway-first** — All data comes from the official EVE Frontier blockchain gateway rather than a centralised database, keeping the tool trustless.
+
+---
+
+## Deployment
+
+The app is split into two independently deployed services:
+
+```
+Frontend  →  Vercel   (static React/Vite build)
+Backend   →  Render   (Node.js Express server)
+Database  →  Render PostgreSQL  (or any external Postgres)
+```
+
+---
+
+### Step 1 — Deploy the Backend on Render
+
+**Connect your repo to Render:**
+
+1. Go to [render.com](https://render.com) → New → **Web Service**
+2. Connect your GitHub repo
+3. Set the following in the service settings:
+
+| Setting | Value |
+|---------|-------|
+| **Root Directory** | `artifacts/api-server` |
+| **Runtime** | Node |
+| **Build Command** | `cd ../.. && npm install -g pnpm && pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build` |
+| **Start Command** | `node dist/index.cjs` |
+| **Node Version** | 20 |
+
+**Environment Variables on Render:**
+
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `PORT` | `10000` | Render sets this automatically — you don't need to add it |
+| `DATABASE_URL` | `postgres://...` | From your Render Postgres instance (copy the **Internal URL**) |
+| `CORS_ORIGIN` | `https://your-app.vercel.app` | Your Vercel frontend URL — add this **after** deploying to Vercel |
+| `NODE_ENV` | `production` | |
+
+**Add a Render PostgreSQL database:**
+
+1. Render dashboard → New → **PostgreSQL**
+2. After it's created, copy the **Internal Database URL**
+3. Paste it as `DATABASE_URL` in your web service's environment variables
+
+**Run the database migration:**
+
+After the first deploy succeeds, open the Render Shell for the web service and run:
+```bash
+npx drizzle-kit push
+```
+This creates the `intel_reports` table.
+
+**Verify the backend:**
+```bash
+curl https://your-api.onrender.com/api/health
+# Should return: {"status":"ok"}
+
+curl https://your-api.onrender.com/api/systems
+# Should return: {"systems":[...]}
+```
+
+---
+
+### Step 2 — Deploy the Frontend on Vercel
+
+**Connect your repo to Vercel:**
+
+1. Go to [vercel.com](https://vercel.com) → New Project → Import your GitHub repo
+2. Set the following in **Configure Project**:
+
+| Setting | Value |
+|---------|-------|
+| **Framework Preset** | Vite |
+| **Root Directory** | `artifacts/frontier-intel` |
+| **Build Command** | `cd ../.. && npm install -g pnpm && pnpm install --frozen-lockfile && pnpm --filter @workspace/frontier-intel run build` |
+| **Output Directory** | `dist` |
+| **Install Command** | *(leave blank — handled by build command)* |
+
+**Environment Variables on Vercel:**
+
+Add these under **Project → Settings → Environment Variables**:
+
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `VITE_API_URL` | `https://your-api.onrender.com` | Your Render backend URL — no trailing slash |
+| `VITE_GOOGLE_CLIENT_ID` | `855060394278-....apps.googleusercontent.com` | Google OAuth client ID for zkLogin |
+| `VITE_SUI_NETWORK` | `testnet` | |
+| `VITE_INTEL_PACKAGE_ID` | *(empty for now)* | Fill after deploying the Move contract |
+| `VITE_INTEL_REGISTRY_ID` | *(empty for now)* | Fill after deploying the Move contract |
+
+**After Vercel deploys, copy your Vercel URL** (e.g. `https://frontier-intel.vercel.app`) and:
+1. Go back to Render → your web service → Environment
+2. Set `CORS_ORIGIN` = `https://frontier-intel.vercel.app`
+3. Trigger a **Manual Deploy** on Render to pick up the new CORS setting
+
+---
+
+### Step 3 — Configure Google OAuth for Production
+
+Your Google OAuth client needs to know about the production domain:
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials
+2. Click your OAuth 2.0 Client ID
+3. Under **Authorized JavaScript origins**, add:
+   ```
+   https://frontier-intel.vercel.app
+   ```
+4. Under **Authorized redirect URIs**, add:
+   ```
+   https://frontier-intel.vercel.app/
+   ```
+5. Save — changes take ~5 minutes to propagate
+
+---
+
+### Step 4 — Verify the Full Stack
+
+```bash
+# 1. Backend health
+curl https://your-api.onrender.com/api/health
+
+# 2. CORS is working (replace with your actual URLs)
+curl -H "Origin: https://frontier-intel.vercel.app" \
+     -I https://your-api.onrender.com/api/systems
+# Look for: Access-Control-Allow-Origin: https://frontier-intel.vercel.app
+
+# 3. Frontend loads at
+# https://frontier-intel.vercel.app
+
+# 4. Connect wallet → submit intel → check it appears
+curl https://your-api.onrender.com/api/intel
+```
+
+---
+
+### Environment Variable Summary
+
+#### Render (backend)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `PORT` | Auto-set | Render sets this — do not override |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `CORS_ORIGIN` | Yes | Your Vercel frontend URL (comma-separated for multiple) |
+| `NODE_ENV` | Yes | Set to `production` |
+
+#### Vercel (frontend)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_API_URL` | Yes | Your Render backend URL, no trailing slash |
+| `VITE_GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID for zkLogin |
+| `VITE_SUI_NETWORK` | No | `testnet` (default) or `mainnet` |
+| `VITE_INTEL_PACKAGE_ID` | No | Move contract package ID (after deployment) |
+| `VITE_INTEL_REGISTRY_ID` | No | Move contract Registry object ID (after deployment) |
+
+---
+
+### Troubleshooting
+
+**CORS errors in browser console**
+- Make sure `CORS_ORIGIN` on Render exactly matches your Vercel URL (no trailing slash)
+- Redeploy Render after adding/changing `CORS_ORIGIN`
+
+**"Failed to fetch" on the frontend**
+- Check `VITE_API_URL` is set correctly in Vercel (no trailing slash)
+- Make sure the Render service is awake — free tier spins down after 15 min of inactivity
+
+**Google login redirect fails**
+- Add your Vercel URL to the authorized origins AND redirect URIs in Google Cloud Console
+- Ensure `VITE_GOOGLE_CLIENT_ID` in Vercel matches the client ID exactly
+
+**Database errors on Render**
+- Run `npx drizzle-kit push` in the Render Shell to create/update tables
+- Use the **Internal** Database URL (not external) to avoid egress charges
