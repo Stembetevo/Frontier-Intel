@@ -10,13 +10,15 @@ tags:
   - name: health
     description: Health operations
   - name: kills
-    description: Kill event data from EVE Frontier blockchain gateway
+    description: Kill event data from on-chain telemetry indexer
   - name: assemblies
-    description: Smart Assembly structure data
+    description: Smart Assembly structure data from on-chain telemetry indexer
   - name: jumps
-    description: Gate jump traffic data
+    description: Gate jump traffic data from on-chain telemetry indexer
   - name: intel
     description: Player-submitted intel reports
+  - name: telemetry
+    description: On-chain telemetry indexer operations
 paths:
   /healthz:
     get:
@@ -37,7 +39,7 @@ paths:
       operationId: getKills
       tags: [kills]
       summary: Get recent kill events
-      description: Fetches KillmailCreatedEvents from the EVE Frontier blockchain gateway
+      description: Fetches indexed kill events from local on-chain telemetry store
       parameters:
         - name: limit
           in: query
@@ -61,7 +63,7 @@ paths:
       operationId: getAssemblies
       tags: [assemblies]
       summary: Get smart assemblies
-      description: Fetches player-built structures from the EVE Frontier blockchain gateway
+      description: Fetches indexed player-built structures from local on-chain telemetry store
       parameters:
         - name: solar_system_id
           in: query
@@ -80,7 +82,7 @@ paths:
       operationId: getJumps
       tags: [jumps]
       summary: Get gate jump traffic
-      description: Fetches gate jump events from the EVE Frontier blockchain gateway
+      description: Fetches indexed gate jump events from local on-chain telemetry store
       parameters:
         - name: limit
           in: query
@@ -176,6 +178,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SolarSystemsResponse"
+
+  /telemetry/sync:
+    post:
+      operationId: syncTelemetry
+      tags: [telemetry]
+      summary: Sync telemetry indexer from chain
+      description: Queries Sui events by configured package/module sources and stores normalized telemetry rows.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 250
+                  default: 100
+      responses:
+        "200":
+          description: Telemetry sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetrySyncResponse"
+
+  /telemetry/status:
+    get:
+      operationId: getTelemetryStatus
+      tags: [telemetry]
+      summary: Get telemetry indexer status
+      description: Returns cursor and source configuration status for the custom indexer.
+      responses:
+        "200":
+          description: Telemetry indexer status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryIndexerStatusResponse"
 
 components:
   schemas:
@@ -404,6 +446,99 @@ components:
         - systems
         - total
         - last_updated
+
+    TelemetrySyncSourceSummary:
+      type: object
+      properties:
+        stream:
+          type: string
+          enum: [kills, jumps, assemblies]
+        package_id:
+          type: string
+        module:
+          type: string
+        synced_count:
+          type: integer
+        skipped_count:
+          type: integer
+        next_cursor:
+          type: object
+          nullable: true
+          additionalProperties: true
+        has_next_page:
+          type: boolean
+      required:
+        - stream
+        - package_id
+        - module
+        - synced_count
+        - skipped_count
+        - has_next_page
+
+    TelemetrySyncResponse:
+      type: object
+      properties:
+        rpc_url:
+          type: string
+        package_ids:
+          type: array
+          items:
+            type: string
+        summaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/TelemetrySyncSourceSummary"
+        total_synced:
+          type: integer
+        total_skipped:
+          type: integer
+        synced_at:
+          type: string
+      required:
+        - rpc_url
+        - package_ids
+        - summaries
+        - total_synced
+        - total_skipped
+        - synced_at
+
+    TelemetryIndexerCursorStatus:
+      type: object
+      properties:
+        stream_key:
+          type: string
+        updated_at:
+          type: string
+        has_cursor:
+          type: boolean
+      required:
+        - stream_key
+        - updated_at
+        - has_cursor
+
+    TelemetryIndexerStatusResponse:
+      type: object
+      properties:
+        rpc_url:
+          type: string
+        package_ids:
+          type: array
+          items:
+            type: string
+        cursor_count:
+          type: integer
+        cursors:
+          type: array
+          items:
+            $ref: "#/components/schemas/TelemetryIndexerCursorStatus"
+        checked_at:
+          type: string
+      required:
+        - rpc_url
+        - package_ids
+        - cursor_count
+        - cursors
+        - checked_at
 
     ErrorResponse:
       type: object

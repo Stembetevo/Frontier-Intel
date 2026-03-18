@@ -9,6 +9,8 @@ export const intelReportsTable = pgTable("intel_reports", {
   wallet_address: varchar("wallet_address", { length: 255 }).notNull(),
   report_type: varchar("report_type", { length: 50 }).notNull().default("OTHER"),
   signature: text("signature"),
+  tx_digest: varchar("tx_digest", { length: 255 }),
+  on_chain_report_id: text("on_chain_report_id"),
   created_at: timestamp("created_at").defaultNow().notNull(),
   expires_at: timestamp("expires_at"),
 });

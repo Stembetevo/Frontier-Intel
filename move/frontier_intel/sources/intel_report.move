@@ -9,16 +9,11 @@ module frontier_intel::intel_report {
     use sui::clock::{Self, Clock};
 
     // ── Report types ───────────────────────────────────────────────────────────
-    const REPORT_FLEET_SPOTTED:    u8 = 0;
-    const REPORT_GATE_CAMP:        u8 = 1;
-    const REPORT_ANOMALY:          u8 = 2;
-    const REPORT_STRUCTURE_HOSTILE:u8 = 3;
-    const REPORT_CLEAR:            u8 = 4;
-    const REPORT_OTHER:            u8 = 5;
+    const REPORT_OTHER:u8 = 5;
 
     // ── Errors ────────────────────────────────────────────────────────────────
-    const EInvalidReportType:  u64 = 1;
-    const EMessageTooLong:     u64 = 2;
+    const EInvalidReportType:u64 = 1;
+    const EMessageTooLong:u64 = 2;
     const ESystemIdTooLong:    u64 = 3;
 
     const MAX_MESSAGE_LEN: u64 = 1024;
@@ -67,7 +62,8 @@ module frontier_intel::intel_report {
 
     /// Submit a new intel report.
     /// The report object is transferred to the caller.
-    public entry fun submit_report(
+    #[allow(lint(self_transfer))]
+    public fun submit_report(
         registry: &mut Registry,
         clock: &Clock,
         solar_system_id: vector<u8>,

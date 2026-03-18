@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model IntelReport {
+  id               Int       @id @default(autoincrement())
+  solar_system_id  String
+  message          String
+  wallet_address   String    @db.VarChar(255)
+  report_type      String    @db.VarChar(50) @default("OTHER")
+  signature        String?
+  tx_digest        String?   @db.VarChar(255)
+  on_chain_report_id String?
+  created_at       DateTime  @default(now())
+  expires_at       DateTime?
+
+  @@map("intel_reports")
+}
+
+model TelemetryKill {
+  id                     Int      @id @default(autoincrement())
+  tx_digest              String
+  event_seq              String
+  killmail_id            String
+  killer_character_id    String
+  victim_character_id    String
+  solar_system_id        String
+  loss_type              String   @default("SHIP")
+  event_timestamp        DateTime
+  indexed_at             DateTime @default(now())
+
+  @@unique([tx_digest, event_seq], name: "telemetry_kills_tx_event_unique")
+  @@map("telemetry_kills")
+}
+
+model TelemetryJump {
+  id                     Int      @id @default(autoincrement())
+  tx_digest              String
+  event_seq              String
+  character_id           String
+  from_solar_system_id   String
+  to_solar_system_id     String
+  gate_id                String?
+  event_timestamp        DateTime
+  indexed_at             DateTime @default(now())
+
+  @@unique([tx_digest, event_seq], name: "telemetry_jumps_tx_event_unique")
+  @@map("telemetry_jumps")
+}
+
+model TelemetryAssembly {
+  id                     Int      @id @default(autoincrement())
+  assembly_id            String   @unique(map: "telemetry_assemblies_assembly_unique")
+  solar_system_id        String
+  owner_character_id     String
+  assembly_type          String   @default("UNKNOWN")
+  is_online              Boolean  @default(false)
+  name                   String   @default("Unknown Assembly")
+  tx_digest              String
+  event_seq              String
+  event_timestamp        DateTime
+  indexed_at             DateTime @default(now())
+
+  @@map("telemetry_assemblies")
+}
+
+model TelemetryCursor {
+  id                     Int      @id @default(autoincrement())
+  stream_key             String   @unique(map: "telemetry_cursors_stream_key_unique")
+  cursor_json            String?
+  updated_at             DateTime @default(now())
+
+  @@map("telemetry_cursors")
+}

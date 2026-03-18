@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useWallet } from '@/contexts/WalletContext';
-import { ConnectModal } from '@mysten/dapp-kit';
+import { useZkLogin } from '@/contexts/ZkLoginContext';
 import { NeonButton, TacticalPanel } from './ui/SciFiUI';
 import { useCreateIntelReport, CreateIntelReportRequestReportType } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -14,9 +13,10 @@ interface IntelModalProps {
 }
 
 export function IntelModal({ systemId, isOpen, onClose }: IntelModalProps) {
-  const { address, isConnected } = useWallet();
+  const { address, isConnected, hasProof, isLoading, login, submitIntelReport } = useZkLogin();
   const [message, setMessage] = useState('');
   const [reportType, setReportType] = useState<CreateIntelReportRequestReportType>(CreateIntelReportRequestReportType.FLEET_SPOTTED);
+  const reportTypeOptions = Object.values(CreateIntelReportRequestReportType) as CreateIntelReportRequestReportType[];
   
   const queryClient = useQueryClient();
   const createMutation = useCreateIntelReport({
@@ -30,18 +30,31 @@ export function IntelModal({ systemId, isOpen, onClose }: IntelModalProps) {
     }
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!address) return;
 
-    createMutation.mutate({
-      data: {
-        solar_system_id: systemId,
+    try {
+      // 1) Submit report on-chain and capture digest.
+      const { digest } = await submitIntelReport({
+        systemId,
         message,
-        report_type: reportType,
-        wallet_address: address
-      }
-    });
+        reportType,
+      });
+
+      // 2) Mirror into existing API schema for current dashboard feed.
+      createMutation.mutate({
+        data: {
+          solar_system_id: systemId,
+          message,
+          report_type: reportType,
+          wallet_address: address,
+          signature: digest,
+        },
+      });
+    } catch (error) {
+      console.error('[intel] on-chain submit failed:', error);
+    }
   };
 
   return (
@@ -79,16 +92,18 @@ export function IntelModal({ systemId, isOpen, onClose }: IntelModalProps) {
                   <div className="text-lg font-mono text-white">{systemId}</div>
                 </div>
 
-                {!isConnected ? (
+                {!isConnected || !hasProof ? (
                   <div className="bg-warning/10 border border-warning/30 p-4 rounded text-center space-y-3">
-                    <p className="text-sm text-warning font-mono">EVE Vault connection required to sign intel reports.</p>
-                    <ConnectModal
-                      trigger={
-                        <NeonButton type="button" variant="outline" className="w-full text-warning border-warning hover:bg-warning/20 hover:text-warning">
-                          CONNECT VAULT
-                        </NeonButton>
-                      }
-                    />
+                    <p className="text-sm text-warning font-mono">Google zkLogin required to submit on-chain intel reports.</p>
+                    <NeonButton
+                      type="button"
+                      variant="outline"
+                      className="w-full text-warning border-warning hover:bg-warning/20 hover:text-warning"
+                      onClick={login}
+                      isLoading={isLoading}
+                    >
+                      SIGN IN WITH GOOGLE
+                    </NeonButton>
                   </div>
                 ) : (
                   <>
@@ -99,7 +114,7 @@ export function IntelModal({ systemId, isOpen, onClose }: IntelModalProps) {
                         onChange={(e) => setReportType(e.target.value as CreateIntelReportRequestReportType)}
                         className="w-full bg-input border border-border text-white p-2.5 rounded font-mono text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
                       >
-                        {Object.values(CreateIntelReportRequestReportType).map(type => (
+                        {reportTypeOptions.map(type => (
                           <option key={type} value={type}>{type.replace('_', ' ')}</option>
                         ))}
                       </select>
@@ -123,7 +138,7 @@ export function IntelModal({ systemId, isOpen, onClose }: IntelModalProps) {
                     <NeonButton 
                       type="submit" 
                       className="w-full gap-2 mt-4" 
-                      isLoading={createMutation.isPending}
+                      isLoading={createMutation.isPending || isLoading}
                     >
                       <Send className="w-4 h-4" />
                       TRANSMIT INTEL

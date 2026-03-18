@@ -44,7 +44,7 @@ const REGISTRY_ID = import.meta.env.VITE_INTEL_REGISTRY_ID as string | undefined
 
 // Sui testnet RPC
 const TESTNET_RPC = "https://fullnode.testnet.sui.io:443";
-const suiClient = new SuiJsonRpcClient({ url: TESTNET_RPC });
+const suiClient = new SuiJsonRpcClient({ url: TESTNET_RPC, network: "testnet" });
 
 // Sui Clock object ID (shared, always 0x6)
 const CLOCK_ID = "0x0000000000000000000000000000000000000000000000000000000000000006";
@@ -63,6 +63,10 @@ const STORAGE_KEYS = {
 // Report type mapping → u8
 export const REPORT_TYPE_MAP: Record<string, number> = {
   FLEET_SPOTTED: 0,
+  AMBUSH: 1,
+  TRADE_ROUTE: 2,
+  SAFE: 4,
+  // Legacy aliases kept for compatibility with older clients.
   GATE_CAMP: 1,
   ANOMALY: 2,
   STRUCTURE_HOSTILE: 3,
@@ -102,18 +106,14 @@ const ZkLoginContext = createContext<(ZkLoginState & ZkLoginActions) | undefined
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function storeKeypair(kp: Ed25519Keypair) {
-  sessionStorage.setItem(
-    STORAGE_KEYS.EPHEMERAL_KEYPAIR,
-    JSON.stringify(Array.from(kp.export().privateKey))
-  );
+  sessionStorage.setItem(STORAGE_KEYS.EPHEMERAL_KEYPAIR, kp.getSecretKey());
 }
 
 function loadKeypair(): Ed25519Keypair | null {
   const raw = sessionStorage.getItem(STORAGE_KEYS.EPHEMERAL_KEYPAIR);
   if (!raw) return null;
   try {
-    const bytes = new Uint8Array(JSON.parse(raw));
-    return Ed25519Keypair.fromSecretKey(bytes);
+    return Ed25519Keypair.fromSecretKey(raw);
   } catch {
     return null;
   }
@@ -158,7 +158,7 @@ export function ZkLoginProvider({ children }: { children: React.ReactNode }) {
         const proof = JSON.parse(proofRaw);
         const decoded = decodeJwt(jwt) as Record<string, unknown>;
         const sub = decoded.sub as string;
-        const address = jwtToAddress(jwt, salt);
+        const address = jwtToAddress(jwt, salt, false);
         proofRef.current = proof;
         userSaltRef.current = salt;
         maxEpochRef.current = maxEpoch ? Number(maxEpoch) : 0;
@@ -208,7 +208,7 @@ export function ZkLoginProvider({ children }: { children: React.ReactNode }) {
       const kp = loadKeypair();
       if (!kp) throw new Error("Session expired — please log in again");
 
-      const address = jwtToAddress(jwt, salt);
+      const address = jwtToAddress(jwt, salt, false);
       const extPk = getExtendedEphemeralPublicKey(kp.getPublicKey());
 
       // Fetch current epoch for max_epoch bound

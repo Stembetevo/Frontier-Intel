@@ -5,6 +5,83 @@ import { eq, desc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
+const DEFAULT_TESTNET_RPC = "https://fullnode.testnet.sui.io:443";
+const REPORT_TYPE_FROM_U8: Record<number, string> = {
+  0: "FLEET_SPOTTED",
+  1: "AMBUSH",
+  2: "TRADE_ROUTE",
+  4: "SAFE",
+  5: "OTHER",
+};
+
+function getIntelPackageId() {
+  return (
+    process.env.INTEL_PACKAGE_ID ||
+    process.env.VITE_INTEL_PACKAGE_ID ||
+    ""
+  ).trim();
+}
+
+function getSuiRpcUrl() {
+  return (process.env.SUI_RPC_URL || DEFAULT_TESTNET_RPC).trim();
+}
+
+async function suiRpcCall<T>(method: string, params: unknown[]) {
+  const rpcUrl = getSuiRpcUrl();
+  const response = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method,
+      params,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Sui RPC ${method} failed with status ${response.status}`);
+  }
+
+  const data = (await response.json()) as { result?: T; error?: { message?: string } };
+  if (data.error) {
+    throw new Error(data.error.message || `Sui RPC ${method} returned an error`);
+  }
+
+  return data.result as T;
+}
+
+function parseStringField(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "bytes" in value) {
+    const bytes = (value as { bytes?: unknown }).bytes;
+    if (typeof bytes === "string") return bytes;
+  }
+  return "";
+}
+
+async function getReportMessage(reportId: string): Promise<string> {
+  type GetObjectResult = {
+    data?: {
+      content?: {
+        dataType?: string;
+        fields?: Record<string, unknown>;
+      };
+    };
+  };
+
+  const objectResult = await suiRpcCall<GetObjectResult>("sui_getObject", [
+    reportId,
+    { showContent: true },
+  ]);
+
+  const fields = objectResult?.data?.content?.fields;
+  if (!fields) return "[on-chain report]";
+
+  const message = parseStringField(fields.message);
+  return message || "[on-chain report]";
+}
+
 router.get("/intel", async (req, res) => {
   try {
     const solarSystemId = req.query.solar_system_id as string | undefined;
@@ -40,7 +117,15 @@ router.get("/intel", async (req, res) => {
 
 router.post("/intel", async (req, res) => {
   try {
-    const { solar_system_id, message, wallet_address, report_type, signature } = req.body;
+    const {
+      solar_system_id,
+      message,
+      wallet_address,
+      report_type,
+      signature,
+      tx_digest,
+      on_chain_report_id,
+    } = req.body;
 
     if (!solar_system_id || !message || !wallet_address || !report_type) {
       return res.status(400).json({ error: "Missing required fields: solar_system_id, message, wallet_address, report_type" });
@@ -51,8 +136,8 @@ router.post("/intel", async (req, res) => {
       return res.status(400).json({ error: `Invalid report_type. Must be one of: ${validTypes.join(", ")}` });
     }
 
-    if (message.length > 500) {
-      return res.status(400).json({ error: "Message too long (max 500 chars)" });
+    if (message.length > 1024) {
+      return res.status(400).json({ error: "Message too long (max 1024 chars)" });
     }
 
     const expiresAt = new Date();
@@ -66,6 +151,8 @@ router.post("/intel", async (req, res) => {
         wallet_address,
         report_type,
         signature: signature || null,
+        tx_digest: tx_digest || signature || null,
+        on_chain_report_id: on_chain_report_id || null,
         expires_at: expiresAt,
       })
       .returning();
@@ -78,6 +165,102 @@ router.post("/intel", async (req, res) => {
   } catch (err) {
     console.error("[intel] post error:", err);
     return res.status(500).json({ error: "Failed to create intel report" });
+  }
+});
+
+router.post("/intel/sync-onchain", async (req, res) => {
+  try {
+    const packageId = getIntelPackageId();
+    if (!packageId) {
+      return res.status(400).json({
+        error: "Missing INTEL_PACKAGE_ID (or VITE_INTEL_PACKAGE_ID) in environment",
+      });
+    }
+
+    const requestedLimit = Number(req.body?.limit ?? 25);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(100, requestedLimit))
+      : 25;
+    const cursor = req.body?.cursor ?? null;
+
+    type QueryEventsResult = {
+      data: Array<{
+        id?: { txDigest?: string; eventSeq?: string };
+        parsedJson?: Record<string, unknown>;
+      }>;
+      nextCursor?: unknown;
+      hasNextPage?: boolean;
+    };
+
+    const eventType = `${packageId}::intel_report::IntelReportSubmitted`;
+    const eventsPage = await suiRpcCall<QueryEventsResult>("suix_queryEvents", [
+      { MoveEventType: eventType },
+      cursor,
+      limit,
+      false,
+    ]);
+
+    const synced: Array<{ tx_digest: string; report_id: string }> = [];
+    const skipped: Array<{ tx_digest: string; reason: string }> = [];
+
+    for (const eventItem of eventsPage.data || []) {
+      const parsed = eventItem.parsedJson || {};
+      const reportId = String(parsed.report_id || "");
+      const solarSystemId = parseStringField(parsed.solar_system_id);
+      const author = String(parsed.author || "");
+      const timestampMs = Number(parsed.timestamp_ms || 0);
+      const txDigest = String(eventItem.id?.txDigest || "");
+      const reportTypeU8 = Number(parsed.report_type || 5);
+      const reportType = REPORT_TYPE_FROM_U8[reportTypeU8] || "OTHER";
+
+      if (!reportId || !solarSystemId || !author || !txDigest) {
+        skipped.push({ tx_digest: txDigest || "unknown", reason: "missing required event fields" });
+        continue;
+      }
+
+      const existing = await db
+        .select({ id: intelReportsTable.id })
+        .from(intelReportsTable)
+        .where(eq(intelReportsTable.tx_digest, txDigest))
+        .limit(1);
+
+      if (existing.length > 0) {
+        skipped.push({ tx_digest: txDigest, reason: "already indexed" });
+        continue;
+      }
+
+      const message = await getReportMessage(reportId);
+      const createdAt = timestampMs > 0 ? new Date(timestampMs) : new Date();
+      const expiresAt = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000);
+
+      await db.insert(intelReportsTable).values({
+        solar_system_id: solarSystemId,
+        message,
+        wallet_address: author,
+        report_type: reportType,
+        signature: txDigest,
+        tx_digest: txDigest,
+        on_chain_report_id: reportId,
+        created_at: createdAt,
+        expires_at: expiresAt,
+      });
+
+      synced.push({ tx_digest: txDigest, report_id: reportId });
+    }
+
+    return res.json({
+      synced_count: synced.length,
+      skipped_count: skipped.length,
+      synced,
+      skipped,
+      next_cursor: eventsPage.nextCursor ?? null,
+      has_next_page: Boolean(eventsPage.hasNextPage),
+      source_event_type: eventType,
+      rpc_url: getSuiRpcUrl(),
+    });
+  } catch (err) {
+    console.error("[intel] sync-onchain error:", err);
+    return res.status(500).json({ error: "Failed to sync on-chain intel reports" });
   }
 });
 

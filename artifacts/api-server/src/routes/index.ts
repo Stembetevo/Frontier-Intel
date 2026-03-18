@@ -5,6 +5,7 @@ import assembliesRouter from "./assemblies.js";
 import jumpsRouter from "./jumps.js";
 import intelRouter from "./intel.js";
 import systemsRouter from "./systems.js";
+import telemetryRouter from "./telemetry.js";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(assembliesRouter);
 router.use(jumpsRouter);
 router.use(intelRouter);
 router.use(systemsRouter);
+router.use(telemetryRouter);
 
 export default router;

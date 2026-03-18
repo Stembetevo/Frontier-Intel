@@ -6,6 +6,7 @@ import "@mysten/dapp-kit/dist/index.css";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WalletBridgeProvider } from "@/contexts/WalletContext";
+import { ZkLoginProvider } from "@/contexts/ZkLoginContext";
 import Home from "@/pages/Home";
 import NotFound from "@/pages/not-found";
 
@@ -23,6 +24,9 @@ const queryClient = new QueryClient({
   },
 });
 
+const defaultNetwork =
+  import.meta.env.VITE_SUI_NETWORK === "mainnet" ? "mainnet" : "testnet";
+
 function Router() {
   return (
     <Switch>
@@ -35,19 +39,21 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <SuiClientProvider networks={networkConfig} defaultNetwork="mainnet">
+      <SuiClientProvider networks={networkConfig} defaultNetwork={defaultNetwork}>
         <WalletProvider
           autoConnect
           preferredWallets={["EVE Vault", "Sui Wallet", "Suiet"]}
           theme={null}
         >
           <WalletBridgeProvider>
-          <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
-            <Toaster />
-          </TooltipProvider>
+            <ZkLoginProvider>
+              <TooltipProvider>
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <Router />
+                </WouterRouter>
+                <Toaster />
+              </TooltipProvider>
+            </ZkLoginProvider>
           </WalletBridgeProvider>
         </WalletProvider>
       </SuiClientProvider>
