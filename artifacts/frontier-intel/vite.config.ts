@@ -11,6 +11,7 @@ const isReplit = !!process.env.REPL_ID;
 const rawPort = process.env.PORT;
 const port = rawPort ? Number(rawPort) : 5173;
 const basePath = process.env.BASE_PATH ?? "/";
+const devApiProxyTarget = process.env.DEV_API_PROXY_TARGET ?? "http://localhost:3000";
 
 export default defineConfig(async () => ({
   base: basePath,
@@ -54,6 +55,12 @@ export default defineConfig(async () => ({
     host: "0.0.0.0",
     allowedHosts: true,
     fs: { strict: true, deny: ["**/.*"] },
+    proxy: {
+      "/api": {
+        target: devApiProxyTarget,
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     port,

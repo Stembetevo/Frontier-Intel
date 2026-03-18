@@ -101,17 +101,25 @@ Click any system node → click **Submit Intel** → fill in the form → submit
 ### 5. API endpoints work (via browser or curl)
 ```bash
 # Health check
-curl https://<your-replit-domain>/api-server/api/health
+curl http://localhost:3000/api/healthz
 
 # Systems threat data
-curl https://<your-replit-domain>/api-server/api/systems
+curl http://localhost:3000/api/systems
 
 # Intel reports
-curl https://<your-replit-domain>/api-server/api/intel
+curl http://localhost:3000/api/intel
+
+# Trigger one telemetry ingest pass from Stillness/mainnet
+curl -X POST http://localhost:3000/api/telemetry/sync \
+   -H "Content-Type: application/json" \
+   -d '{"limit":250}'
+
+# Check indexer cursor/status
+curl http://localhost:3000/api/telemetry/status
 ```
 
-### 6. Gateway fallback in dev
-In the Replit sandbox, the EVE Frontier gateway hostname is unreachable (DNS blocked). The app gracefully falls back to seeded demo data so the map still renders. In production deployment, the gateway resolves correctly and live data flows through.
+### 6. Live telemetry mode
+The frontend is now live-first: if no indexed systems are available, it shows a telemetry hint instead of generating fake systems. If you want demo visuals for UI-only testing, set `VITE_ENABLE_DEMO_FALLBACK=true` in `artifacts/frontier-intel/.env`.
 
 ---
 
@@ -261,9 +269,10 @@ Add these under **Project → Settings → Environment Variables**:
 |----------|-------|-------|
 | `VITE_API_URL` | `https://your-api.onrender.com` | Your Render backend URL — no trailing slash |
 | `VITE_GOOGLE_CLIENT_ID` | `855060394278-....apps.googleusercontent.com` | Google OAuth client ID for zkLogin |
-| `VITE_SUI_NETWORK` | `testnet` | |
+| `VITE_SUI_NETWORK` | `mainnet` | Use mainnet for Stillness-aligned wallet reads |
 | `VITE_INTEL_PACKAGE_ID` | *(empty for now)* | Fill after deploying the Move contract |
 | `VITE_INTEL_REGISTRY_ID` | *(empty for now)* | Fill after deploying the Move contract |
+| `VITE_ENABLE_DEMO_FALLBACK` | `false` | Keep live-only behavior; set `true` only for UI demo mode |
 
 **After Vercel deploys, copy your Vercel URL** (e.g. `https://frontier-intel.vercel.app`) and:
 1. Go back to Render → your web service → Environment
@@ -320,6 +329,12 @@ curl https://your-api.onrender.com/api/intel
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `CORS_ORIGIN` | Yes | Your Vercel frontend URL (comma-separated for multiple) |
 | `NODE_ENV` | Yes | Set to `production` |
+| `SUI_RPC_URL` | Yes | `https://fullnode.mainnet.sui.io:443` for Stillness data |
+| `TELEMETRY_SYNC_ENABLED` | No | `true` by default; set `false` to disable background sync |
+| `TELEMETRY_SYNC_ON_START` | No | `true` by default; run sync once at startup |
+| `TELEMETRY_SYNC_INTERVAL_MS` | No | Sync interval in ms (default `60000`) |
+| `TELEMETRY_SYNC_LIMIT` | No | Events per source sync pass (default `200`, max `250`) |
+| `TELEMETRY_SYNC_API_KEY` | No | If set, required for `POST /api/telemetry/sync` |
 
 #### Vercel (frontend)
 
@@ -327,9 +342,10 @@ curl https://your-api.onrender.com/api/intel
 |----------|----------|-------------|
 | `VITE_API_URL` | Yes | Your Render backend URL, no trailing slash |
 | `VITE_GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID for zkLogin |
-| `VITE_SUI_NETWORK` | No | `testnet` (default) or `mainnet` |
+| `VITE_SUI_NETWORK` | No | `mainnet` (default) or `testnet` |
 | `VITE_INTEL_PACKAGE_ID` | No | Move contract package ID (after deployment) |
 | `VITE_INTEL_REGISTRY_ID` | No | Move contract Registry object ID (after deployment) |
+| `VITE_ENABLE_DEMO_FALLBACK` | No | `false` (default), set `true` for mock map data |
 
 ---
 

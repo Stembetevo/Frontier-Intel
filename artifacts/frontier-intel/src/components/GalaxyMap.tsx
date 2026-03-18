@@ -9,6 +9,17 @@ interface GalaxyMapProps {
   selectedSystemId: string | null;
 }
 
+type GalaxyNode = d3.SimulationNodeDatum &
+  SolarSystemThreat & {
+    id: string;
+    r: number;
+    x: number;
+    y: number;
+  };
+
+const enableDemoFallback =
+  String(import.meta.env.VITE_ENABLE_DEMO_FALLBACK || "").toLowerCase() === "true";
+
 // Generate deterministic fake systems if API is empty
 const generateFakeSystems = (): SolarSystemThreat[] => {
   return Array.from({ length: 60 }).map((_, i) => {
@@ -38,8 +49,10 @@ export function GalaxyMap({ systems, onSystemSelect, selectedSystemId }: GalaxyM
   useEffect(() => {
     if (systems && systems.length > 0) {
       setMapData(systems);
-    } else {
+    } else if (enableDemoFallback) {
       setMapData(generateFakeSystems());
+    } else {
+      setMapData([]);
     }
   }, [systems]);
 
@@ -72,7 +85,7 @@ export function GalaxyMap({ systems, onSystemSelect, selectedSystemId }: GalaxyM
     svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
 
     // Create Nodes data with deterministic initial positions based on ID
-    const nodes = mapData.map((d, i) => {
+    const nodes: GalaxyNode[] = mapData.map((d, i) => {
       // Create a spiraling galaxy shape deterministically
       const angle = seededRandom(i * 100) * Math.PI * 2 * 4;
       const radius = seededRandom(i * 200) * (width / 2.5);
@@ -180,8 +193,8 @@ export function GalaxyMap({ systems, onSystemSelect, selectedSystemId }: GalaxyM
       .style("animation", "pulse 2s infinite");
 
     // Force simulation for slight drifting effect
-    const simulation = d3.forceSimulation(nodes)
-      .force("collide", d3.forceCollide().radius(d => d.r + 10).iterations(2))
+    const simulation = d3.forceSimulation<GalaxyNode>(nodes)
+      .force("collide", d3.forceCollide<GalaxyNode>().radius(d => d.r + 10).iterations(2))
       .alphaDecay(0) // Never fully stop, keep gently moving
       .velocityDecay(0.8)
       .on("tick", () => {

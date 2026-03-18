@@ -8,7 +8,7 @@ export function Navbar() {
   const account = useCurrentAccount();
   const { mutate: disconnectWallet } = useDisconnectWallet();
   const { isError, isLoading } = useGetSolarSystems({
-    query: { refetchInterval: 30000, retry: false },
+    query: { queryKey: ['/api/systems'], refetchInterval: 30000, retry: false },
   });
 
   const address = account?.address ?? null;

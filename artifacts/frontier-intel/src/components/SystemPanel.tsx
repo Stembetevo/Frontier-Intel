@@ -19,12 +19,22 @@ export function SystemPanel({ systemId, systemStats, onClose }: SystemPanelProps
   // Only fetch details if a system is selected
   const { data: assembliesData, isLoading: loadingAssemblies } = useGetAssemblies(
     { solar_system_id: systemId || undefined },
-    { query: { enabled: !!systemId } }
+    {
+      query: {
+        queryKey: ['/api/assemblies', { solar_system_id: systemId || undefined }],
+        enabled: !!systemId,
+      },
+    }
   );
 
   const { data: intelData, isLoading: loadingIntel } = useGetIntelReports(
     { solar_system_id: systemId || undefined },
-    { query: { enabled: !!systemId } }
+    {
+      query: {
+        queryKey: ['/api/intel', { solar_system_id: systemId || undefined }],
+        enabled: !!systemId,
+      },
+    }
   );
 
   if (!systemId) return null;
@@ -47,12 +57,12 @@ export function SystemPanel({ systemId, systemStats, onClose }: SystemPanelProps
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed right-0 top-16 bottom-0 w-full md:w-[450px] z-30 flex flex-col pointer-events-auto"
+          className="fixed right-0 top-16 bottom-0 w-full z-30 flex flex-col pointer-events-auto"
         >
-          <TacticalPanel className="h-full rounded-none border-y-0 border-r-0 flex flex-col !p-0">
+          <TacticalPanel className="h-full rounded-none border-y-0 border-r-0 flex flex-col">
             {/* Header */}
             <div className="p-5 border-b border-border/50 bg-secondary/30 relative overflow-hidden">
-              <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(68,68,68,.2)_50%,transparent_75%,transparent_100%)] bg-[length:4px_4px] opacity-20" />
+              <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(68,68,68,.2)_50%,transparent_75%,transparent_100%)]  opacity-20" />
               <div className="flex justify-between items-start relative z-10">
                 <div>
                   <div className="text-xs text-muted-foreground font-mono mb-1">SYSTEM IDENTIFIER</div>

@@ -6,7 +6,7 @@ export type CustomFetchOptions = RequestInit & {
  * In production (deployed to Vercel), the API lives on a separate Render domain.
  * Set VITE_API_URL to that domain (e.g. https://frontier-intel-api.onrender.com)
  * and all API requests will be automatically prefixed.
- * Leave unset in development — requests go to the Replit-proxied local server.
+ * Leave unset in development when frontend and API are served from the same origin.
  */
 const API_BASE =
   typeof import.meta !== "undefined" &&

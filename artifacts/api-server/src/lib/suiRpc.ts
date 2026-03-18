@@ -1,4 +1,4 @@
-const DEFAULT_TESTNET_RPC = "https://fullnode.testnet.sui.io:443";
+const DEFAULT_MAINNET_RPC = "https://fullnode.mainnet.sui.io:443";
 
 export type SuiEventId = {
   txDigest?: string;
@@ -18,7 +18,7 @@ export type SuiEventsPage = {
 };
 
 export function getSuiRpcUrl() {
-  return (process.env.SUI_RPC_URL || DEFAULT_TESTNET_RPC).trim();
+  return (process.env.SUI_RPC_URL || DEFAULT_MAINNET_RPC).trim();
 }
 
 export async function suiRpcCall<T>(method: string, params: unknown[]) {
