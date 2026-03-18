@@ -19,6 +19,7 @@ import React, {
 } from "react";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import {
+  genAddressSeed,
   generateNonce,
   generateRandomness,
   getExtendedEphemeralPublicKey,
@@ -37,10 +38,17 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
 // Mysten Labs public ZK proving service (testnet)
 const PROVER_URL = "https://prover-dev.mystenlabs.com/v1";
 
+function normalizeEnvId(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "undefined" || trimmed === "null") return undefined;
+  return trimmed;
+}
+
 // Our deployed Move contract on Sui testnet
 // Will be set after deployment — kept in env var
-const PACKAGE_ID = import.meta.env.VITE_INTEL_PACKAGE_ID as string | undefined;
-const REGISTRY_ID = import.meta.env.VITE_INTEL_REGISTRY_ID as string | undefined;
+const PACKAGE_ID = normalizeEnvId(import.meta.env.VITE_INTEL_PACKAGE_ID as string | undefined);
+const REGISTRY_ID = normalizeEnvId(import.meta.env.VITE_INTEL_REGISTRY_ID as string | undefined);
 
 // Sui testnet RPC
 const TESTNET_RPC = "https://fullnode.testnet.sui.io:443";
@@ -211,12 +219,18 @@ export function ZkLoginProvider({ children }: { children: React.ReactNode }) {
       const address = jwtToAddress(jwt, salt, false);
       const extPk = getExtendedEphemeralPublicKey(kp.getPublicKey());
 
-      // Fetch current epoch for max_epoch bound
-      const { epoch } = await suiClient.getLatestSuiSystemState();
-      const maxEpoch = Number(epoch) + 2;
+      // Reuse the same maxEpoch/randomness that were used to build the login nonce.
+      // If these drift, Groth16 verification fails on-chain.
+      const storedMaxEpoch = sessionStorage.getItem(STORAGE_KEYS.MAX_EPOCH);
+      const randomness = sessionStorage.getItem(STORAGE_KEYS.RANDOMNESS);
+      if (!storedMaxEpoch || !randomness) {
+        throw new Error("Missing zkLogin nonce context (maxEpoch/randomness). Please sign in again.");
+      }
+      const maxEpoch = Number(storedMaxEpoch);
+      if (!Number.isFinite(maxEpoch) || maxEpoch <= 0) {
+        throw new Error("Invalid zkLogin maxEpoch in session. Please sign in again.");
+      }
       maxEpochRef.current = maxEpoch;
-
-      const randomness = sessionStorage.getItem(STORAGE_KEYS.RANDOMNESS) ?? "0";
 
       // Call Mysten prover
       const proverResp = await fetch(PROVER_URL, {
@@ -284,6 +298,7 @@ export function ZkLoginProvider({ children }: { children: React.ReactNode }) {
 
       const nonce = generateNonce(kp.getPublicKey(), maxEpoch, randomness);
       sessionStorage.setItem(STORAGE_KEYS.NONCE, nonce);
+      sessionStorage.setItem(STORAGE_KEYS.MAX_EPOCH, String(maxEpoch));
 
       // Build Google OAuth URL (implicit / fragment flow)
       const redirectUri = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, "") + "/";
@@ -333,6 +348,15 @@ export function ZkLoginProvider({ children }: { children: React.ReactNode }) {
       if (!state.address || !proofRef.current) {
         throw new Error("Not authenticated — please sign in first");
       }
+      if (!systemId || typeof systemId !== "string") {
+        throw new Error("Invalid system id");
+      }
+      if (!message || typeof message !== "string") {
+        throw new Error("Message is required");
+      }
+      if (!reportType || typeof reportType !== "string") {
+        throw new Error("Invalid report type");
+      }
       if (!PACKAGE_ID || !REGISTRY_ID) {
         throw new Error(
           "Smart contract not yet deployed. Set VITE_INTEL_PACKAGE_ID and VITE_INTEL_REGISTRY_ID."
@@ -342,7 +366,38 @@ export function ZkLoginProvider({ children }: { children: React.ReactNode }) {
       const kp = loadKeypair();
       if (!kp) throw new Error("Session expired — please log in again");
 
+      const gasCoins = await suiClient.getCoins({
+        owner: state.address,
+        limit: 1,
+      });
+      if (!gasCoins.data || gasCoins.data.length === 0) {
+        throw new Error(
+          "No valid gas coins found for the transaction. Fund your zkLogin address from the Sui testnet faucet, then retry."
+        );
+      }
+
       const reportTypeU8 = REPORT_TYPE_MAP[reportType] ?? REPORT_TYPE_MAP.OTHER;
+      const normalizedSystemId = systemId.trim();
+      const normalizedMessage = message.trim();
+
+      const jwt = sessionStorage.getItem(STORAGE_KEYS.JWT);
+      const userSalt = userSaltRef.current || sessionStorage.getItem(STORAGE_KEYS.USER_SALT) || "";
+      if (!jwt || !userSalt) {
+        throw new Error("Session proof incomplete — please sign in again");
+      }
+
+      const decodedJwt = decodeJwt(jwt) as { sub?: unknown; aud?: unknown };
+      const sub = typeof decodedJwt.sub === "string" ? decodedJwt.sub : "";
+      const aud = Array.isArray(decodedJwt.aud)
+        ? decodedJwt.aud.find((v): v is string => typeof v === "string") || ""
+        : typeof decodedJwt.aud === "string"
+          ? decodedJwt.aud
+          : "";
+      if (!sub || !aud) {
+        throw new Error("Invalid OAuth claims for zkLogin — please sign in again");
+      }
+
+      const addressSeed = genAddressSeed(BigInt(userSalt), "sub", sub, aud).toString();
 
       const tx = new Transaction();
       tx.setSender(state.address);
@@ -353,16 +408,21 @@ export function ZkLoginProvider({ children }: { children: React.ReactNode }) {
         arguments: [
           tx.object(REGISTRY_ID),
           tx.object(CLOCK_ID),
-          tx.pure.vector("u8", Array.from(new TextEncoder().encode(systemId))),
-          tx.pure.vector("u8", Array.from(new TextEncoder().encode(message))),
+          tx.pure.vector("u8", Array.from(new TextEncoder().encode(normalizedSystemId))),
+          tx.pure.vector("u8", Array.from(new TextEncoder().encode(normalizedMessage))),
           tx.pure.u8(reportTypeU8),
         ],
       });
 
       const { bytes, signature: partialSig } = await tx.sign({ client: suiClient, signer: kp });
 
+      const proofInputs = {
+        ...(proofRef.current as Record<string, unknown>),
+        addressSeed,
+      };
+
       const zkSig = getZkLoginSignature({
-        inputs: proofRef.current as Parameters<typeof getZkLoginSignature>[0]["inputs"],
+        inputs: proofInputs as Parameters<typeof getZkLoginSignature>[0]["inputs"],
         maxEpoch: maxEpochRef.current,
         userSignature: partialSig,
       });

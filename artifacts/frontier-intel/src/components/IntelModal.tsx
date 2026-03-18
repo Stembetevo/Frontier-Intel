@@ -13,8 +13,9 @@ interface IntelModalProps {
 }
 
 export function IntelModal({ systemId, isOpen, onClose }: IntelModalProps) {
-  const { address, isConnected, hasProof, isLoading, login, submitIntelReport } = useZkLogin();
+  const { address, isConnected, hasProof, isLoading, login, logout, submitIntelReport } = useZkLogin();
   const [message, setMessage] = useState('');
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [reportType, setReportType] = useState<CreateIntelReportRequestReportType>(CreateIntelReportRequestReportType.FLEET_SPOTTED);
   const reportTypeOptions = Object.values(CreateIntelReportRequestReportType) as CreateIntelReportRequestReportType[];
   
@@ -33,28 +34,46 @@ export function IntelModal({ systemId, isOpen, onClose }: IntelModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!address) return;
+    setSubmitError(null);
+
+    const trimmedMessage = message.trim();
+    if (!systemId || !trimmedMessage) {
+      console.error('[intel] missing system id or message');
+      return;
+    }
+
+    let digest: string | undefined;
 
     try {
-      // 1) Submit report on-chain and capture digest.
-      const { digest } = await submitIntelReport({
+      // 1) Try submit on-chain and capture digest.
+      const chainResult = await submitIntelReport({
         systemId,
-        message,
+        message: trimmedMessage,
         reportType,
       });
-
-      // 2) Mirror into existing API schema for current dashboard feed.
-      createMutation.mutate({
-        data: {
-          solar_system_id: systemId,
-          message,
-          report_type: reportType,
-          wallet_address: address,
-          signature: digest,
-        },
-      });
+      digest = chainResult.digest;
     } catch (error) {
       console.error('[intel] on-chain submit failed:', error);
+      const msg = error instanceof Error ? error.message : String(error);
+      setSubmitError(msg);
+
+      if (msg.includes('Groth16 proof verify failed') || msg.includes('Invalid user signature')) {
+        // Stale zkLogin session/proof; force a clean auth cycle.
+        logout();
+      }
     }
+
+    // 2) Always mirror into API schema so dashboard intel feed still updates.
+    createMutation.mutate({
+      data: {
+        solar_system_id: systemId,
+        message: trimmedMessage,
+        report_type: reportType,
+        wallet_address: address,
+        signature: digest,
+        
+      },
+    });
   };
 
   return (
@@ -134,6 +153,12 @@ export function IntelModal({ systemId, isOpen, onClose }: IntelModalProps) {
                     <div className="text-xs text-muted-foreground font-mono bg-black/20 p-2 rounded border border-white/5 break-all">
                       Signing as: <span className="text-primary">{address}</span>
                     </div>
+
+                    {submitError && (
+                      <div className="text-xs text-warning bg-warning/10 border border-warning/30 p-2 rounded font-mono">
+                        {submitError}
+                      </div>
+                    )}
 
                     <NeonButton 
                       type="submit" 

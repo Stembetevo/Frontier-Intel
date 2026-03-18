@@ -124,6 +124,12 @@ function readParsed(event: SuiEventEnvelope) {
   return event.parsedJson || {};
 }
 
+function isUniqueConstraintError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const maybe = err as { code?: unknown };
+  return maybe.code === "P2002";
+}
+
 async function indexKillEvent(event: SuiEventEnvelope): Promise<boolean> {
   const { txDigest, eventSeq } = toEventIdentity(event);
   if (!txDigest || !eventSeq) return false;
@@ -154,7 +160,7 @@ async function indexKillEvent(event: SuiEventEnvelope): Promise<boolean> {
     });
   } catch (e: unknown) {
     // Unique constraint violation - already indexed, ignore
-    if (e instanceof Error && e.message.includes("Unique constraint")) {
+    if (isUniqueConstraintError(e)) {
       return true; // Count as processed
     }
     throw e;
@@ -191,7 +197,7 @@ async function indexJumpEvent(event: SuiEventEnvelope): Promise<boolean> {
     });
   } catch (e: unknown) {
     // Unique constraint violation - already indexed, ignore
-    if (e instanceof Error && e.message.includes("Unique constraint")) {
+    if (isUniqueConstraintError(e)) {
       return true;
     }
     throw e;
@@ -353,9 +359,15 @@ export async function queryIndexedAssemblies(options?: { solarSystemId?: string 
 }
 
 export async function getTelemetryIndexerStatus() {
-  const keys = await prisma.telemetryCursor.findMany({
-    orderBy: { updated_at: "desc" },
-  });
+  const keys: Array<{ stream_key: string; updated_at: Date; cursor_json: string | null }> =
+    await prisma.telemetryCursor.findMany({
+      select: {
+        stream_key: true,
+        updated_at: true,
+        cursor_json: true,
+      },
+      orderBy: { updated_at: "desc" },
+    });
 
   return {
     rpc_url: getSuiRpcUrl(),

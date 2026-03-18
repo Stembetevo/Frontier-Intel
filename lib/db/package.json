@@ -8,9 +8,11 @@
     "./schema": "./src/schema/index.ts"
   },
   "scripts": {
-    "migrate": "prisma migrate deploy",
-    "migrate:dev": "prisma migrate dev",
-    "generate": "prisma generate"
+    "push": "bash -lc 'set -a && source ../../artifacts/api-server/.env && set +a && prisma db push'",
+    "migrate": "bash -lc 'set -a && source ../../artifacts/api-server/.env && set +a && prisma migrate deploy'",
+    "migrate:dev": "bash -lc 'set -a && source ../../artifacts/api-server/.env && set +a && prisma migrate dev'",
+    "generate": "prisma generate",
+    "studio": "bash -lc 'set -a && source ../../artifacts/api-server/.env && set +a && prisma studio'"
   },
   "dependencies": {
     "@prisma/client": "^5.8.0",

@@ -1,7 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { intelReportsTable } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { prisma } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -86,23 +84,13 @@ router.get("/intel", async (req, res) => {
   try {
     const solarSystemId = req.query.solar_system_id as string | undefined;
 
-    let reports;
-    if (solarSystemId) {
-      reports = await db
-        .select()
-        .from(intelReportsTable)
-        .where(eq(intelReportsTable.solar_system_id, solarSystemId))
-        .orderBy(desc(intelReportsTable.created_at))
-        .limit(50);
-    } else {
-      reports = await db
-        .select()
-        .from(intelReportsTable)
-        .orderBy(desc(intelReportsTable.created_at))
-        .limit(200);
-    }
+    const reports = await prisma.intelReport.findMany({
+      where: solarSystemId ? { solar_system_id: solarSystemId } : undefined,
+      orderBy: { created_at: "desc" },
+      take: solarSystemId ? 50 : 200,
+    });
 
-    const serialized = reports.map(r => ({
+    const serialized = reports.map((r) => ({
       ...r,
       created_at: r.created_at.toISOString(),
       expires_at: r.expires_at ? r.expires_at.toISOString() : undefined,
@@ -143,9 +131,8 @@ router.post("/intel", async (req, res) => {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24);
 
-    const [created] = await db
-      .insert(intelReportsTable)
-      .values({
+    const created = await prisma.intelReport.create({
+      data: {
         solar_system_id,
         message: message.trim(),
         wallet_address,
@@ -154,8 +141,8 @@ router.post("/intel", async (req, res) => {
         tx_digest: tx_digest || signature || null,
         on_chain_report_id: on_chain_report_id || null,
         expires_at: expiresAt,
-      })
-      .returning();
+      },
+    });
 
     return res.status(201).json({
       ...created,
@@ -218,13 +205,12 @@ router.post("/intel/sync-onchain", async (req, res) => {
         continue;
       }
 
-      const existing = await db
-        .select({ id: intelReportsTable.id })
-        .from(intelReportsTable)
-        .where(eq(intelReportsTable.tx_digest, txDigest))
-        .limit(1);
+      const existing = await prisma.intelReport.findFirst({
+        where: { tx_digest: txDigest },
+        select: { id: true },
+      });
 
-      if (existing.length > 0) {
+      if (existing) {
         skipped.push({ tx_digest: txDigest, reason: "already indexed" });
         continue;
       }
@@ -233,16 +219,18 @@ router.post("/intel/sync-onchain", async (req, res) => {
       const createdAt = timestampMs > 0 ? new Date(timestampMs) : new Date();
       const expiresAt = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000);
 
-      await db.insert(intelReportsTable).values({
-        solar_system_id: solarSystemId,
-        message,
-        wallet_address: author,
-        report_type: reportType,
-        signature: txDigest,
-        tx_digest: txDigest,
-        on_chain_report_id: reportId,
-        created_at: createdAt,
-        expires_at: expiresAt,
+      await prisma.intelReport.create({
+        data: {
+          solar_system_id: solarSystemId,
+          message,
+          wallet_address: author,
+          report_type: reportType,
+          signature: txDigest,
+          tx_digest: txDigest,
+          on_chain_report_id: reportId,
+          created_at: createdAt,
+          expires_at: expiresAt,
+        },
       });
 
       synced.push({ tx_digest: txDigest, report_id: reportId });
@@ -271,12 +259,11 @@ router.delete("/intel/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid id" });
     }
 
-    const deleted = await db
-      .delete(intelReportsTable)
-      .where(eq(intelReportsTable.id, id))
-      .returning();
+    const deleted = await prisma.intelReport.deleteMany({
+      where: { id },
+    });
 
-    if (deleted.length === 0) {
+    if (deleted.count === 0) {
       return res.status(404).json({ error: "Intel report not found" });
     }
 

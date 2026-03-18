@@ -60,49 +60,49 @@ router.get("/systems", async (_req, res) => {
       }
       return systemMap.get(id)!;
     };
-      // Count kills in 1h
-      for (const kill of allKills1h) {
-        const sys = getSystem(kill.solar_system_id);
-        sys.kill_count_1h += 1;
-        const ts = kill.event_timestamp.getTime();
+
+    // Count kills in 1h
+    for (const kill of allKills1h) {
+      const sys = getSystem(kill.solar_system_id);
+      sys.kill_count_1h += 1;
+      const ts = kill.event_timestamp.getTime();
+      sys.last_activity = Math.max(sys.last_activity, ts);
+    }
+
+    // Count kills in 24h
+    for (const kill of allKills24h) {
+      const sys = getSystem(kill.solar_system_id);
+      sys.kill_count_24h += 1;
+    }
+
+    // Count jumps in 1h
+    for (const jump of allJumps1h) {
+      if (jump.from_solar_system_id) {
+        const sys = getSystem(jump.from_solar_system_id);
+        sys.jump_count_1h += 1;
+        const ts = jump.event_timestamp.getTime();
         sys.last_activity = Math.max(sys.last_activity, ts);
-      getSystem(row.solar_system_id).kill_count_1h = row.count;
-    }
-      // Count kills in 24h
-      for (const kill of allKills24h) {
-        const sys = getSystem(kill.solar_system_id);
-        sys.kill_count_24h += 1;
-      getSystem(row.solar_system_id).kill_count_24h = row.count;
-    }
-      // Count jumps in 1h
-      for (const jump of allJumps1h) {
-        if (jump.from_solar_system_id) {
-          const sys = getSystem(jump.from_solar_system_id);
-          sys.jump_count_1h += 1;
-          const ts = jump.event_timestamp.getTime();
-          sys.last_activity = Math.max(sys.last_activity, ts);
-        getSystem(row.from_solar_system_id).jump_count_1h += row.count;
-        if (jump.to_solar_system_id) {
-          const sys = getSystem(jump.to_solar_system_id);
-          sys.jump_count_1h += 1;
-          const ts = jump.event_timestamp.getTime();
-          sys.last_activity = Math.max(sys.last_activity, ts);
-        getSystem(row.to_solar_system_id).jump_count_1h += row.count;
+      }
+      if (jump.to_solar_system_id) {
+        const sys = getSystem(jump.to_solar_system_id);
+        sys.jump_count_1h += 1;
+        const ts = jump.event_timestamp.getTime();
+        sys.last_activity = Math.max(sys.last_activity, ts);
       }
     }
-      // Count assemblies
-      for (const assembly of allAssemblies) {
-        const sys = getSystem(assembly.solar_system_id);
-        sys.assembly_count += 1;
-        const ts = assembly.event_timestamp.getTime();
-        sys.last_activity = Math.max(sys.last_activity, ts);
-      getSystem(row.solar_system_id).assembly_count = row.count;
+
+    // Count assemblies
+    for (const assembly of allAssemblies) {
+      const sys = getSystem(assembly.solar_system_id);
+      sys.assembly_count += 1;
+      const ts = assembly.event_timestamp.getTime();
+      sys.last_activity = Math.max(sys.last_activity, ts);
     }
-      // Count intel reports
-      for (const report of allIntelReports) {
-        const sys = getSystem(report.solar_system_id);
-        sys.intel_count += 1;
-      }
+
+    // Count intel reports
+    for (const report of allIntelReports) {
+      const sys = getSystem(report.solar_system_id);
+      sys.intel_count += 1;
     }
 
     const systems = Array.from(systemMap.entries())
