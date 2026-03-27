@@ -37,6 +37,16 @@ const allowlist = [
   "zod-validation-error",
 ];
 
+// Prisma Client relies on generated runtime files under .prisma/* that should
+// be resolved at runtime, not bundled by esbuild.
+const forcedExternals = [
+  "@prisma/client",
+  "@prisma/client/*",
+  ".prisma/client",
+  ".prisma/client/*",
+  "prisma",
+];
+
 async function buildAll() {
   const distDir = path.resolve(__dirname, "dist");
   await rm(distDir, { recursive: true, force: true });
@@ -64,7 +74,7 @@ async function buildAll() {
       "process.env.NODE_ENV": '"production"',
     },
     minify: true,
-    external: externals,
+    external: [...new Set([...externals, ...forcedExternals])],
     logLevel: "info",
   });
 }
