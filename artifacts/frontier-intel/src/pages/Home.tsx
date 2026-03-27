@@ -6,6 +6,9 @@ import { SystemPanel } from '@/components/SystemPanel';
 import { Legend } from '@/components/Legend';
 import { Loader2 } from 'lucide-react';
 
+const demoFallbackEnabled =
+  String(import.meta.env.VITE_ENABLE_DEMO_FALLBACK || '').toLowerCase() === 'true';
+
 export default function Home() {
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
   
@@ -21,7 +24,8 @@ export default function Home() {
   const systems = systemsResponse?.systems ?? [];
 
   const selectedSystemStats = systems.find(s => s.solar_system_id === selectedSystemId);
-  const showNoTelemetryHint = !isLoading && systems.length === 0;
+  const showNoTelemetryHint = !isLoading && systems.length === 0 && !demoFallbackEnabled;
+  const showDemoModeHint = !isLoading && systems.length === 0 && demoFallbackEnabled;
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-background text-foreground">
@@ -54,6 +58,15 @@ export default function Home() {
           <p className="font-mono text-xs text-primary">NO LIVE TELEMETRY YET</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Trigger /api/telemetry/sync on the backend to ingest Stillness events.
+          </p>
+        </div>
+      )}
+
+      {showDemoModeHint && (
+        <div className="absolute top-20 left-1/2 z-20 -translate-x-1/2 rounded-md border border-warning/50 bg-background/85 px-4 py-2 text-center backdrop-blur">
+          <p className="font-mono text-xs text-warning">DEMO DATASET MODE ACTIVE</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Showing curated presentation data while live telemetry is unavailable.
           </p>
         </div>
       )}

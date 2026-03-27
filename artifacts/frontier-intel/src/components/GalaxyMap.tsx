@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { type SolarSystemThreat, SolarSystemThreatThreatLevel } from '@workspace/api-client-react';
+import { type SolarSystemThreat } from '@workspace/api-client-react';
 import { seededRandom } from '@/lib/utils';
+import { demoSystemsDataset } from '@/data/demoSystems';
 
 interface GalaxyMapProps {
   systems: SolarSystemThreat[];
@@ -20,27 +21,6 @@ type GalaxyNode = d3.SimulationNodeDatum &
 const enableDemoFallback =
   String(import.meta.env.VITE_ENABLE_DEMO_FALLBACK || "").toLowerCase() === "true";
 
-// Generate deterministic fake systems if API is empty
-const generateFakeSystems = (): SolarSystemThreat[] => {
-  return Array.from({ length: 60 }).map((_, i) => {
-    const r = seededRandom(i * 10);
-    let level: SolarSystemThreatThreatLevel = "UNKNOWN";
-    if (r > 0.8) level = "HIGH";
-    else if (r > 0.5) level = "MEDIUM";
-    else if (r > 0.2) level = "LOW";
-
-    return {
-      solar_system_id: `SYS-${1000 + i}`,
-      threat_level: level,
-      kill_count_1h: Math.floor(r * 20),
-      kill_count_24h: Math.floor(r * 100),
-      jump_count_1h: Math.floor(seededRandom(i * 11) * 500),
-      assembly_count: Math.floor(seededRandom(i * 12) * 5),
-      intel_count: Math.floor(seededRandom(i * 13) * 10),
-    };
-  });
-};
-
 export function GalaxyMap({ systems, onSystemSelect, selectedSystemId }: GalaxyMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,7 +30,7 @@ export function GalaxyMap({ systems, onSystemSelect, selectedSystemId }: GalaxyM
     if (systems && systems.length > 0) {
       setMapData(systems);
     } else if (enableDemoFallback) {
-      setMapData(generateFakeSystems());
+      setMapData(demoSystemsDataset);
     } else {
       setMapData([]);
     }
