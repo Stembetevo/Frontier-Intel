@@ -13,6 +13,7 @@
   "dependencies": {
     "@workspace/db": "workspace:*",
     "@workspace/api-zod": "workspace:*",
+    "@prisma/client": "^5.22.0",
     "express": "^5",
     "cookie-parser": "^1.4.7",
     "cors": "^2"
