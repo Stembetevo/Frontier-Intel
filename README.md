@@ -259,7 +259,7 @@ curl https://your-api.onrender.com/api/systems
 | **Root Directory** | `artifacts/frontier-intel` |
 | **Build Command** | `cd ../.. && npm install -g pnpm && pnpm install --frozen-lockfile && pnpm --filter @workspace/frontier-intel run build` |
 | **Output Directory** | `dist` |
-| **Install Command** | *(leave blank — handled by build command)* |
+| **Install Command** | `cd ../.. && corepack enable && pnpm install --frozen-lockfile` |
 
 **Environment Variables on Vercel:**
 
